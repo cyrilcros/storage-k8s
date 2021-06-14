@@ -1,0 +1,41 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rook-ceph-operator
+  namespace: argocd
+  annotations:
+  labels:
+    argocd.cyril/label: storage
+    argocd.cyril/exposure: infra
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # The project the application belongs to.
+  project: default
+
+  # Source of the application manifests
+  source:
+    repoURL: https://charts.rook.io/release
+    targetRevision: v1.6.5
+    chart: rook-ceph
+    path: ''
+
+    helm:
+      releaseName: rook-ceph
+      values: |
+        csi:
+          enableRbdDriver: false
+
+  # Destination cluster and namespace to deploy the application
+  destination:
+    server: https://k8s-control.test:6443
+    namespace: rook-ceph
+
+  # Sync policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 0

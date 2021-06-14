@@ -1,0 +1,97 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: galaxy
+  namespace: argocd
+  labels:
+    argocd.cyril/label: work
+    argocd.cyril/exposure: external
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # The project the application belongs to.
+  project: default
+
+  # Destination cluster and namespace to deploy the application
+  destination:
+    server: https://k8s-control.test:6443
+    namespace: bioinfo
+
+  # Sync policy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 0
+
+  # Source of the application manifests
+  source:
+    repoURL: https://raw.githubusercontent.com/cloudve/helm-charts/master
+    chart: 'galaxy'
+    targetRevision: 4.3.0
+    path: ''
+
+    helm:
+      releaseName: galaxy
+      version: v3
+      values: |
+        persistence:
+          enabled: true
+          existingClaim: galaxy-data
+        ingress:
+          enabled: true
+          canary:
+            enabled: false
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-body-size: "10G"
+            nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+            kubernetes.io/ingress.class: "nginx-external"
+            cert-manager.io/cluster-issuer: "letsencrypt-prod"
+          hosts:
+          - host: 'galaxy.neuroworm.science'
+            paths:
+            - path: "/"
+          tls:
+          - secretName: galaxy-cert
+            hosts:
+            - 'galaxy.neuroworm.science'
+          path: '/galaxy'
+
+        postgresql:
+          enabled: true
+          deploy: false
+          existingDatabase: galaxy-postgresql.bioinfo.svc.cluster.local
+          galaxyDatabaseUser: galaxydbuser
+          galaxyExistingSecret: galaxy-db-secret
+          galaxyExistingSecretKeyRef: postgresql-password
+          galaxyConnectionParams: ""
+
+        extraEnv:
+        - name: GALAXY_ADMIN_PWD
+          valueFrom:
+            secretKeyRef:
+              name: galaxy-db-secret
+              key: galaxy-admin-pwd
+
+        cvmfs:
+          enabled: false
+          deploy: false
+
+        influxdb:
+          enabled: false
+
+        metrics:
+          enabled: false
+
+
+        affinity:
+          nodeAffinity:
+             preferredDuringSchedulingIgnoredDuringExecution:
+             - weight: 1
+               preference:
+                 matchExpressions:
+                 - key: 'server'
+                   operator: In
+                   values:
+                   - 'true'
